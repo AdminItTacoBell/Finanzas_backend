@@ -45,3 +45,4 @@ GET https://localhost:7103/api/finanzas/service-status  (requiere JWT)
 ## Siguiente corte
 
 Antes de copiar código financiero se debe inventariar el flujo completo elegido. La recomendación sigue siendo comenzar por Liquidaciones como un corte vertical: tablas, procedimientos, API, jobs, archivos, correo, tiempo real, pruebas y reconciliación. No copiar el esquema `finanzas` completo sin clasificar sus dependencias administrativas.
+# Finanzas_backend
