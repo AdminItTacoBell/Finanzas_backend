@@ -1,0 +1,51 @@
+{
+  "family": "bellconnect-finanzas-ENV",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/bellconnect-finanzas-execution-ENV",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/bellconnect-finanzas-task-ENV",
+  "containerDefinitions": [
+    {
+      "name": "finanzas-api",
+      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/bellconnect-finanzas:IMAGE_TAG",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "ASPNETCORE_ENVIRONMENT", "value": "ENVIRONMENT_NAME" },
+        { "name": "Cors__AllowedOrigins__0", "value": "FRONTEND_ORIGIN" },
+        { "name": "Erp__BaseUrl", "value": "ERP_API_BASE_URL" },
+        { "name": "Erp__InternalApiKeyHeader", "value": "X-Internal-Api-Key" },
+        { "name": "Jwt__Issuer", "value": "BellConnect.Api" },
+        { "name": "Jwt__Audience", "value": "BellConnect.Frontend" }
+      ],
+      "secrets": [
+        { "name": "ConnectionStrings__FinanceDb", "valueFrom": "FINANCE_DB_SECRET_ARN" },
+        { "name": "Jwt__Key", "valueFrom": "JWT_KEY_SECRET_ARN" },
+        { "name": "Erp__InternalApiKey", "valueFrom": "ERP_INTERNAL_API_KEY_SECRET_ARN" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -fsS http://localhost:8080/health/live || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bellconnect-finanzas-ENV",
+          "awslogs-region": "REGION",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}
+
