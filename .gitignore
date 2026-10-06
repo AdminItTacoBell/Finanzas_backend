@@ -8,4 +8,4 @@ TestResults/
 coverage/
 .env
 appsettings.Local.json
-
+.publish-check/

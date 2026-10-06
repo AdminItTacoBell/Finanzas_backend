@@ -1,15 +1,15 @@
 {
-  "family": "bellconnect-finanzas-ENV",
+  "family": "finanzas-backend-ENV-task",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/bellconnect-finanzas-execution-ENV",
-  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/bellconnect-finanzas-task-ENV",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/finanzas-backend-execution-ENV",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/finanzas-backend-task-ENV",
   "containerDefinitions": [
     {
-      "name": "finanzas-api",
-      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/bellconnect-finanzas:IMAGE_TAG",
+      "name": "finanzas-backend-ENV",
+      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/finanzas-backend-ENV:IMAGE_TAG",
       "essential": true,
       "portMappings": [
         {
@@ -40,7 +40,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/bellconnect-finanzas-ENV",
+          "awslogs-group": "/ecs/finanzas-backend-ENV-task",
           "awslogs-region": "REGION",
           "awslogs-stream-prefix": "api"
         }
@@ -48,4 +48,3 @@
     }
   ]
 }
-
