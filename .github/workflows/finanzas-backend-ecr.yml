@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-build-and-push:
+  dockerize-and-push:
     runs-on: ubuntu-latest
 
     permissions:
