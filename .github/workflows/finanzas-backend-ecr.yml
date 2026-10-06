@@ -1,0 +1,148 @@
+name: finanzas-backend-ecr
+
+on:
+  push:
+    branches:
+      - main
+      - developer
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente cuya imagen se publicara
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - production
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+concurrency:
+  group: finanzas-backend-${{ github.event.inputs.environment || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test-build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure environment
+        shell: bash
+        env:
+          ECR_REPOSITORY_DEV: ${{ vars.ECR_REPOSITORY_DEV }}
+          ECR_REPOSITORY_PROD: ${{ vars.ECR_REPOSITORY_PROD }}
+          ECS_CLUSTER_DEV: ${{ vars.ECS_CLUSTER_DEV }}
+          ECS_CLUSTER_PROD: ${{ vars.ECS_CLUSTER_PROD }}
+          ECS_SERVICE_DEV: ${{ vars.ECS_SERVICE_DEV }}
+          ECS_SERVICE_PROD: ${{ vars.ECS_SERVICE_PROD }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_ENV="${{ github.event.inputs.environment }}"
+          elif [ "$GITHUB_REF_NAME" = "main" ]; then
+            TARGET_ENV="production"
+          else
+            TARGET_ENV="development"
+          fi
+
+          if [ "$TARGET_ENV" = "production" ]; then
+            ECR_REPOSITORY="$ECR_REPOSITORY_PROD"
+            ECS_CLUSTER="$ECS_CLUSTER_PROD"
+            ECS_SERVICE="$ECS_SERVICE_PROD"
+          else
+            ECR_REPOSITORY="$ECR_REPOSITORY_DEV"
+            ECS_CLUSTER="$ECS_CLUSTER_DEV"
+            ECS_SERVICE="$ECS_SERVICE_DEV"
+          fi
+
+          echo "TARGET_ENV=$TARGET_ENV" >> "$GITHUB_ENV"
+          echo "ECR_REPOSITORY=$ECR_REPOSITORY" >> "$GITHUB_ENV"
+          echo "ECS_CLUSTER=$ECS_CLUSTER" >> "$GITHUB_ENV"
+          echo "ECS_SERVICE=$ECS_SERVICE" >> "$GITHUB_ENV"
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          if [ -z "$AWS_REGION" ]; then
+            echo "Falta la variable AWS_REGION en GitHub Actions."
+            exit 1
+          fi
+
+          if [ -z "$ECR_REPOSITORY" ]; then
+            echo "Falta ECR_REPOSITORY_DEV o ECR_REPOSITORY_PROD para $TARGET_ENV."
+            exit 1
+          fi
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: |
+          dotnet restore Finanzas.Api/Finanzas.Api.csproj
+          dotnet restore Finanzas.Tests/Finanzas.Tests.csproj
+
+      - name: Build API
+        run: dotnet build Finanzas.Api/Finanzas.Api.csproj -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Finanzas.Tests/Finanzas.Tests.csproj -c Release --no-restore
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::912826475284:role/github-actions-bellconnect
+          role-session-name: github-actions-finanzas
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Force new ECS deployment
+        if: ${{ env.ECS_CLUSTER != '' && env.ECS_SERVICE != '' }}
+        shell: bash
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
+
+      - name: Report image-only publication
+        if: ${{ env.ECS_CLUSTER == '' || env.ECS_SERVICE == '' }}
+        shell: bash
+        run: |
+          echo "Imagen publicada en ECR. No se solicito despliegue porque ECS_CLUSTER/ECS_SERVICE aun no estan configurados."

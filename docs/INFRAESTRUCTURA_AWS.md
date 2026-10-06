@@ -6,12 +6,16 @@ Esta fase crea el contenedor independiente sin mover endpoints ni datos. No debe
 
 Crear recursos separados en las VPC de Desarrollo y Produccion:
 
-- ECR: `bellconnect-finanzas`.
-- ECS cluster: `bellconnect-finanzas-dev` / `bellconnect-finanzas-prod`.
+- ECR: `finanzas-backend-dev` / `finanzas-backend-prod`.
+- ECS cluster: `finanzas-dev` / `finanzas-prod`.
+- Task definition: `finanzas-backend-dev-task` / `finanzas-backend-prod-task`.
+- Contenedor: `finanzas-backend-dev` / `finanzas-backend-prod`, puerto `8080`.
+- Target group: `tg-finanzas-backend-dev` / `tg-finanzas-backend-prod`, tipo de destino `ip`.
+- ALB: `alb-finanzas-backend-dev` / `alb-finanzas-backend-prod`.
 - ECS service y task definition propios.
 - Target group propio, puerto 8080, health check `/health/ready`.
 - Container health check `/health/live`.
-- CloudWatch Log Group `/ecs/bellconnect-finanzas-{env}`.
+- CloudWatch Log Group `/ecs/finanzas-backend-{env}-task`.
 - Task role y execution role propios.
 - Security group del task exclusivo.
 - RDS SQL Server de Finanzas y usuario SQL exclusivo.
@@ -56,6 +60,26 @@ Valores sensibles inyectados por ECS desde SSM o Secrets Manager:
 - `Jwt__Key`
 - `Erp__InternalApiKey`
 
+Los nombres registrados actualmente como `ConnectionStrings__FINANZAS`,
+`InternalApiKey__HeaderName` e `InternalApiKey__Key` no son consumidos por este
+microservicio. En la task definition de Finanzas se deben mapear así:
+
+| Nombre en Finanzas | Propósito |
+|---|---|
+| `ConnectionStrings__FinanceDb` | Conexión exclusiva al RDS financiero. |
+| `Erp__InternalApiKeyHeader` | Nombre del encabezado exigido por la API interna del ERP. |
+| `Erp__InternalApiKey` | Clave que Finanzas enviará al ERP. |
+
+`InternalApiKey__HeaderName` e `InternalApiKey__Key` pertenecen al servicio que
+recibe y valida la llamada interna. No se deben guardar claves directamente en
+Docker, GitHub Variables ni en la sección `environment` de ECS.
+
+Mientras el ERP principal conserve su contrato actual, Finanzas debe usar
+`Erp__InternalApiKeyHeader=X-Internal-Api-Key` y su secreto debe contener la
+misma clave que el ERP valida como `InternalApiKey__Key`. Introducir un nombre
+de encabezado distinto solamente en Finanzas provocaría respuestas 401 en las
+llamadas internas.
+
 La task role debe usarse para AWS (S3, SQS u otros) cuando se migren esas funciones; no agregar access key y secret key al archivo de configuracion.
 
 ## Disponibilidad e independencia
@@ -78,4 +102,3 @@ resto de /api/finanzas/*                     -> ERP target group
 ```
 
 La reversión inmediata del código consiste en devolver esa regla al target group del ERP. La reversión de datos exige el procedimiento de corte y reconciliación descrito en `MIGRACION_FINANZAS_A_MICROSERVICIO.md`.
-
